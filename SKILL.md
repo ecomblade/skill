@@ -75,6 +75,14 @@ If a feature call returns `expired_token` or `invalid_token`, refresh once and r
 - The human approval flow happens in the Ecomblade frontend
 - Local credentials are stored in `~/.ecomblade/config.json`
 
+## Claude setup note
+
+If this skill is being installed or used via Claude and direct API access is blocked, add the Ecomblade API domain to Claude's allowlist:
+
+- Go to `Settings > Capabilities > Additional allowed domains`
+- Add: `api.ecomblade.com`
+- Enter the domain only, without `https`
+
 ## Recommended workflow
 
 1. Check whether the user is already authenticated:
