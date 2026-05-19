@@ -12,6 +12,7 @@ npx skills add ecomblade/skill
 
 - prefers the published `ecomblade` CLI
 - supports device-style login to Ecomblade
+- auto-resumes pending device logins after browser approval
 - checks the current connector session with `whoami`
 - supports Amazon and Temu connector feature routes through CLI commands
 - supports local logout and remote revoke through the CLI
@@ -23,9 +24,15 @@ npx skills add ecomblade/skill
 ```bash
 npx ecomblade whoami --json
 npx ecomblade login
-npx ecomblade amazon search-product --query "running shoes" --page 1 --json
 npx ecomblade whoami --json
+npx ecomblade amazon search-product --query "running shoes" --page 1 --json
 npx ecomblade logout --revoke --json
+```
+
+If the browser approval already happened but the original login process was interrupted, resume the exchange with:
+
+```bash
+npx ecomblade login --device-code <device_code> --json
 ```
 
 The canonical machine-readable version for the skill lives in [`skill.json`](./skill.json).

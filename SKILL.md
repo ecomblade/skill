@@ -10,6 +10,7 @@ Use this skill when the task is to authenticate or manage a saved connector sess
 ## What this skill covers
 
 - Device-style CLI login
+- Auto-resume of pending device logins
 - Session inspection with `whoami`
 - Local logout
 - Remote revoke through `logout --revoke`
@@ -51,6 +52,9 @@ Auth flow:
        "device_code": "<device_code>"
      }
      ```
+   - if the response is `authorization_pending`, wait and retry
+   - if the response is `slow_down`, increase the delay before retrying
+   - once approval has happened, keep polling until the request is exchanged and tokens are returned
 4. Save `access_token`, `refresh_token`, `expires_in`, and `session_id`.
 5. When the access token is near expiry, refresh:
    - `POST /public/connectors/auth/refresh`
@@ -77,8 +81,11 @@ If a feature call returns `expired_token` or `invalid_token`, refresh once and r
    - `npx ecomblade whoami --json`
 2. If not authenticated:
    - `npx ecomblade login`
+   - approval alone is not the end of login; the client still needs to complete `/auth/token` exchange
+   - the CLI now auto-resumes pending device logins, so `whoami` can finish a previously approved login if needed
 3. For machine-driven approval handoff:
    - `npx ecomblade login --manual --json`
+   - if the original login process is interrupted after approval: `npx ecomblade login --device-code <code> --json`
    - if a completion code is later available: `npx ecomblade login --device-code <code> --completion-code <code> --json`
 4. Confirm the connector session:
    - `npx ecomblade whoami --json`
@@ -102,6 +109,7 @@ When CLI execution is not available, use these authenticated GET endpoints:
 ## Output handling
 
 - Prefer `--json` whenever the result needs to be parsed or used by another tool step
+- Treat `approved` as a waiting state, not a finished login state; the real usable state is after token exchange succeeds
 - Expect the CLI to preserve connector auth errors such as:
   - `authorization_pending`
   - `slow_down`

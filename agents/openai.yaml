@@ -1,4 +1,4 @@
 interface:
   display_name: "Ecomblade"
   short_description: "Authenticate and run Ecomblade connector searches with the CLI or direct fetches"
-  default_prompt: "Use $ecomblade to log in to Ecomblade connectors, inspect the current connector session, run Amazon or Temu connector searches, and revoke the saved session with the published `npx ecomblade` CLI. If Node is unavailable, use authenticated fetches against the public connector auth and feature routes."
+  default_prompt: "Use $ecomblade to log in to Ecomblade connectors, inspect the current connector session, resume pending device logins when approval already happened, run Amazon or Temu connector searches, and revoke the saved session with the published `npx ecomblade` CLI. If Node is unavailable, use authenticated fetches against the public connector auth and feature routes."
