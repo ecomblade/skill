@@ -1,6 +1,6 @@
 ---
 name: ecomblade
-description: Authenticate with Ecomblade connector APIs and run Amazon or Temu connector searches using the published Ecomblade CLI. Use when a user wants to log in, inspect the current connector session, search via public connector feature routes, or log out and revoke a saved connector session. If the environment cannot run Node or `npx`, use authenticated fetch requests against the public connector auth and feature endpoints instead. Do not use browser automation beyond the human approval step.
+description: Authenticate with Ecomblade connector APIs and run Amazon or Temu connector searches using the published Ecomblade CLI. Use when a user wants to log in, inspect the current connector session, search via public connector feature routes, or log out and revoke a saved connector session. Authentication uses OAuth with PKCE through the CLI; direct HTTP fallback is only for already-authenticated feature calls.
 ---
 
 # Ecomblade Connectors
@@ -9,8 +9,7 @@ Use this skill when the task is to authenticate or manage a saved connector sess
 
 ## What this skill covers
 
-- Device-style CLI login
-- Auto-resume of pending device logins
+- OAuth CLI login with PKCE and a temporary localhost callback
 - Session inspection with `whoami`
 - Local logout
 - Remote revoke through `logout --revoke`
@@ -26,52 +25,12 @@ Prefer the published CLI:
 
 If the CLI repo is checked out locally for development, `node ./bin/ecomblade.js` from that repo is also acceptable.
 
-Do not fall back to direct REST calls unless the CLI is clearly blocked or the user explicitly asks for lower-level debugging.
-
-## Fallback for LLMs without Node
-
-If the environment can make HTTP requests but cannot run `npx ecomblade`, use direct fetches against `https://api.ecomblade.com`.
-
-Auth flow:
-
-1. Start device auth:
-   - `POST /public/connectors/auth/device`
-   - body:
-     ```json
-     {
-       "client_name": "Ecomblade CLI",
-       "machine_name": "chatgpt"
-     }
-     ```
-2. Show the returned `verification_url` and `user_code` to the user for approval.
-3. Poll:
-   - `POST /public/connectors/auth/token`
-   - body:
-     ```json
-     {
-       "device_code": "<device_code>"
-     }
-     ```
-   - if the response is `authorization_pending`, wait and retry
-   - if the response is `slow_down`, increase the delay before retrying
-   - once approval has happened, keep polling until the request is exchanged and tokens are returned
-4. Save `access_token`, `refresh_token`, `expires_in`, and `session_id`.
-5. When the access token is near expiry, refresh:
-   - `POST /public/connectors/auth/refresh`
-   - body:
-     ```json
-     {
-       "refresh_token": "<refresh_token>"
-     }
-     ```
-6. For authenticated calls, send:
-   - `Authorization: Bearer <access_token>`
-
-If a feature call returns `expired_token` or `invalid_token`, refresh once and retry once.
+Do not fall back to direct REST authentication. The supported login flow needs a browser approval step and localhost OAuth callback handled by the CLI.
 
 ## Product assumptions
 
 - The CLI is first-party and always targets `https://api.ecomblade.com`
+- Authentication uses OAuth authorization code with PKCE
 - The human approval flow happens in the Ecomblade frontend
 - Local credentials are stored in `~/.ecomblade/config.json`
 
@@ -89,45 +48,46 @@ If this skill is being installed or used via Claude and direct API access is blo
    - `npx ecomblade whoami --json`
 2. If not authenticated:
    - `npx ecomblade login`
-   - approval alone is not the end of login; the client still needs to complete `/auth/token` exchange
-   - the CLI now auto-resumes pending device logins, so `whoami` can finish a previously approved login if needed
-3. For machine-driven approval handoff:
-   - `npx ecomblade login --manual --json`
-   - if the original login process is interrupted after approval: `npx ecomblade login --device-code <code> --json`
-   - if a completion code is later available: `npx ecomblade login --device-code <code> --completion-code <code> --json`
-4. Confirm the connector session:
+   - approve the OAuth request in the browser
+   - wait for the CLI to receive the localhost callback and save the session
+3. Confirm the connector session:
    - `npx ecomblade whoami --json`
-5. Run connector feature queries when needed:
+4. Run connector feature queries when needed:
    - `npx ecomblade amazon search-product --query "running shoes" --page 1 --json`
    - `npx ecomblade amazon search-category --category-id 172282 --page 1 --json`
    - `npx ecomblade temu search-product --keyword "desk lamp" --page 1 --sort popularity --json`
    - `npx ecomblade temu category-product --category-path "home-kitchen/lighting" --page 1 --sort sales --json`
-6. Revoke and clear the saved session when needed:
+5. Revoke and clear the saved session when needed:
    - `npx ecomblade logout --revoke --json`
 
 ## Direct fetch feature routes
 
-When CLI execution is not available, use these authenticated GET endpoints:
+When CLI execution is not available but an access token already exists, use these authenticated GET endpoints:
 
 - `/public/connectors/features/amazon/search-product?query=<query>&page=<page>&sort=<sort?>`
 - `/public/connectors/features/amazon/search-category?categoryId=<categoryId>&page=<page>`
 - `/public/connectors/features/temu/search-product?keyword=<keyword>&page=<page>&sort=<sort>`
 - `/public/connectors/features/temu/category-product?categoryPath=<categoryPath>&page=<page>&sort=<sort>`
 
+For authenticated calls, send:
+
+- `Authorization: Bearer <access_token>`
+
+If a feature call returns `expired_token` or `invalid_token`, use the CLI to refresh/re-authenticate before retrying.
+
 ## Output handling
 
 - Prefer `--json` whenever the result needs to be parsed or used by another tool step
-- Treat `approved` as a waiting state, not a finished login state; the real usable state is after token exchange succeeds
 - Expect the CLI to preserve connector auth errors such as:
-  - `authorization_pending`
-  - `slow_down`
   - `access_denied`
   - `invalid_token`
   - `expired_token`
-- For direct fetches, expect the backend envelope:
+  - `unauthorized`
+- For direct feature fetches, expect the backend envelope:
   - `success: true` with `data` on success
   - `success: false` with `error.code` and `error.message` on failure
 
 ## Non-goals
 
 - Do not use this skill for browser automation beyond the user approval step
+- Do not use removed device-auth endpoints; connector authentication is OAuth-only

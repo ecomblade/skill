@@ -4,5 +4,5 @@
 
 - Added first-party Ecomblade Codex skill.
 - Standardized the skill around the published `ecomblade` CLI.
-- Documented the current connector auth and feature-search workflow.
-- Added direct fetch fallback guidance for LLMs that cannot run Node-based CLI commands.
+- Documented the OAuth connector auth and feature-search workflow.
+- Added direct fetch guidance for already-authenticated feature calls.
