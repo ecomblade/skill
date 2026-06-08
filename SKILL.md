@@ -71,18 +71,29 @@ Use only these two feature commands:
 Search product platform params:
 
 - `alibaba`: `--keyword <text> [--page <n>] [--page-size <n>]`
-- `amazon`: `--query <text> --page <n> [--sort <value>]`
-- `lazada`: `--keyword <text> --page <n> --region <domain> [--sort <value>]`
-- `temu`: `--keyword <text> --page <n> --sort <value>`
-- `tiktok`: `--keyword <text> --page <n> --sort <value> --region <code>`
+- `amazon`: `--query <text> --page <n> [--sort <sort>]`
+  - `sort`: `relevanceblender`, `price-asc-rank`, `price-desc-rank`, `review-rank`, `date-desc-rank`, `exact-aware-popularity-rank`
+- `lazada`: `--keyword <text> --page <n> --region <region> [--sort <sort>]`
+  - `region`: `lazada.co.id`, `lazada.com.my`, `lazada.sg`, `lazada.com.ph`, `lazada.co.th`, `lazada.vn`
+  - `sort`: `popularity`, `priceasc`, `pricedesc`, `ratingdesc`, `newest`
+- `temu`: `--keyword <text> --page <n> --sort <sort>`
+  - `sort`: `popularity`, `sales`, `most_recent`, `price_low_to_high`, `price_high_to_low`
+- `tiktok`: `--keyword <text> --page <n> --sort <sort> --region <region>`
+  - `sort`: `popularity`, `best_seller`, `newest`, `cheapest`
+  - `region`: `sg`, `th`, `vn`, `id`, `my`, `ph`
 
 Category product platform params:
 
-- `alibaba`: `--category-ids <ids> --page <n> [--tab <value>] [--delivery-id <id>] [--page-deduplicate-id <id>]`
+- `alibaba`: `--category-ids <ids> --page <n> [--tab <tab>] [--delivery-id <id>] [--page-deduplicate-id <id>]`
+  - `tab`: `launches`, `trends`
 - `amazon`: `--category-id <id> --page <n>`
-- `lazada`: `--category-path <path> --page <n> --region <domain> [--sort <value>]`
-- `temu`: `--category-path <path> --page <n> --sort <value>`
-- `tiktok`: `--category <value> --page <n> --region <code>`
+- `lazada`: `--category-path <path> --page <n> --region <region> [--sort <sort>]`
+  - `region`: `lazada.co.id`, `lazada.com.my`, `lazada.sg`, `lazada.com.ph`, `lazada.co.th`, `lazada.vn`
+  - `sort`: `popularity`, `priceasc`, `pricedesc`, `ratingdesc`, `newest`
+- `temu`: `--category-path <path> --page <n> --sort <sort>`
+  - `sort`: `popularity`, `sales`, `most_recent`, `price_low_to_high`, `price_high_to_low`
+- `tiktok`: `--category <value> --page <n> --region <region>`
+  - `region`: `sg`, `th`, `vn`, `id`, `my`, `ph`
 
 ## Direct fetch feature routes
 
