@@ -13,7 +13,7 @@ npx skills add ecomblade/skill
 - prefers the published `ecomblade` CLI
 - supports OAuth login with PKCE and a localhost callback
 - checks the current connector session with `whoami`
-- supports Amazon and Temu connector feature routes through CLI commands
+- supports consolidated connector feature commands with `--platform`
 - supports local logout and remote revoke through the CLI
 - keeps the human approval step in the Ecomblade frontend flow
 - gives direct fetch guidance for already-authenticated feature calls
@@ -24,7 +24,8 @@ npx skills add ecomblade/skill
 npx ecomblade whoami --json
 npx ecomblade login
 npx ecomblade whoami --json
-npx ecomblade amazon search-product --query "running shoes" --page 1 --json
+npx ecomblade search-product --platform amazon --query "running shoes" --page 1 --json
+npx ecomblade search-product --platform lazada --keyword "perfume" --page 1 --region lazada.sg --sort popularity --json
 npx ecomblade logout --revoke --json
 ```
 
