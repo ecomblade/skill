@@ -1,6 +1,6 @@
 ---
 name: ecomblade
-description: Authenticate with Ecomblade connector APIs and run marketplace connector searches using the published Ecomblade CLI. Use when a user wants to log in, inspect the current connector session, search via public connector feature routes, or log out and revoke a saved connector session. Authentication uses OAuth with PKCE through the CLI; direct HTTP fallback is only for already-authenticated feature calls.
+description: Authenticate with Ecomblade connector APIs and run marketplace connector searches using the published Ecomblade CLI. Use when a user wants to log in, inspect the current connector session, search via public connector feature routes, or log out and revoke a saved connector session. Authentication uses OAuth with PKCE through the CLI; Claude Web uses login --web because localhost callbacks are unavailable.
 ---
 
 # Ecomblade Connectors
@@ -10,6 +10,7 @@ Use this skill when the task is to authenticate or manage a saved connector sess
 ## What this skill covers
 
 - OAuth CLI login with PKCE and a temporary localhost callback
+- Claude Web compatible OAuth login with `login --web`
 - Session inspection with `whoami`
 - Local logout
 - Remote revoke through `logout --revoke`
@@ -26,7 +27,7 @@ Prefer the published CLI:
 
 If the CLI repo is checked out locally for development, `node ./bin/ecomblade.js` from that repo is also acceptable.
 
-Do not fall back to direct REST authentication. The supported login flow needs a browser approval step and localhost OAuth callback handled by the CLI.
+Do not fall back to direct REST authentication. The supported login flow needs a browser approval step handled by the CLI. Use normal `login` for local terminals and `login --web` for Claude Web or sandboxes that cannot receive localhost callbacks.
 
 ## Product assumptions
 
@@ -42,6 +43,7 @@ If this skill is being installed or used via Claude and direct API access is blo
 - Go to `Settings > Capabilities > Additional allowed domains`
 - Add: `api.ecomblade.com`
 - Enter the domain only, without `https`
+- Then authenticate with: `npx ecomblade login --web`
 
 ## Recommended workflow
 
@@ -51,6 +53,7 @@ If this skill is being installed or used via Claude and direct API access is blo
    - `npx ecomblade login`
    - approve the OAuth request in the browser
    - wait for the CLI to receive the localhost callback and save the session
+   - in Claude Web, use `npx ecomblade login --web` instead
 3. Confirm the connector session:
    - `npx ecomblade whoami --json`
 4. Run connector feature queries when needed:
