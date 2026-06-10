@@ -4,6 +4,7 @@
 
 - Documented `npx ecomblade login --web` for Claude Web and sandboxed environments.
 - Added pure fetch OAuth fallback guidance for environments that cannot run `npx`.
+- Clarified that Claude Web pure fetch must run through `bash_tool`, not browser widgets, because of CSP.
 
 ## 0.1.0
 
