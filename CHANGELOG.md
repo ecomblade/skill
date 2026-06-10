@@ -3,6 +3,7 @@
 ## 0.1.1
 
 - Documented `npx ecomblade login --web` for Claude Web and sandboxed environments.
+- Added pure fetch OAuth fallback guidance for environments that cannot run `npx`.
 
 ## 0.1.0
 

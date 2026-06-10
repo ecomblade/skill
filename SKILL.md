@@ -1,16 +1,17 @@
 ---
 name: ecomblade
-description: Authenticate with Ecomblade connector APIs and run marketplace connector searches using the published Ecomblade CLI. Use when a user wants to log in, inspect the current connector session, search via public connector feature routes, or log out and revoke a saved connector session. Authentication uses OAuth with PKCE through the CLI; Claude Web uses login --web because localhost callbacks are unavailable.
+description: Authenticate with Ecomblade connector APIs and run marketplace connector searches using the published Ecomblade CLI or pure fetch OAuth fallback. Use when a user wants to log in, inspect the current connector session, search via public connector feature routes, or log out and revoke a saved connector session. Prefer the CLI when available; use pure fetch in Claude Web or environments where npx/local callbacks are unavailable.
 ---
 
 # Ecomblade Connectors
 
-Use this skill when the task is to authenticate or manage a saved connector session for Ecomblade through the supported CLI surface.
+Use this skill when the task is to authenticate or manage a saved connector session for Ecomblade through the supported CLI surface or pure HTTP fetch fallback.
 
 ## What this skill covers
 
 - OAuth CLI login with PKCE and a temporary localhost callback
 - Claude Web compatible OAuth login with `login --web`
+- Pure fetch OAuth with PKCE for environments that cannot run `npx`
 - Session inspection with `whoami`
 - Local logout
 - Remote revoke through `logout --revoke`
@@ -27,7 +28,7 @@ Prefer the published CLI:
 
 If the CLI repo is checked out locally for development, `node ./bin/ecomblade.js` from that repo is also acceptable.
 
-Do not fall back to direct REST authentication. The supported login flow needs a browser approval step handled by the CLI. Use normal `login` for local terminals and `login --web` for Claude Web or sandboxes that cannot receive localhost callbacks.
+If `npx` or the CLI is unavailable, use the pure fetch OAuth workflow below. Do not invent a password login, device-code flow, or token shortcut. The supported fallback is still OAuth authorization code with PKCE and a human approval step in the Ecomblade frontend.
 
 ## Product assumptions
 
@@ -35,6 +36,8 @@ Do not fall back to direct REST authentication. The supported login flow needs a
 - Authentication uses OAuth authorization code with PKCE
 - The human approval flow happens in the Ecomblade frontend
 - Local credentials are stored in `~/.ecomblade/config.json`
+- Pure fetch auth uses `client_id=ecomblade-cli`
+- Pure fetch auth uses `redirect_uri=https://api.ecomblade.com/public/connectors/auth/oauth/web-complete`
 
 ## Claude setup note
 
@@ -43,7 +46,7 @@ If this skill is being installed or used via Claude and direct API access is blo
 - Go to `Settings > Capabilities > Additional allowed domains`
 - Add: `api.ecomblade.com`
 - Enter the domain only, without `https`
-- Then authenticate with: `npx ecomblade login --web`
+- Then authenticate with `npx ecomblade login --web`, or use the pure fetch workflow if `npx` is unavailable
 
 ## Recommended workflow
 
@@ -54,6 +57,7 @@ If this skill is being installed or used via Claude and direct API access is blo
    - approve the OAuth request in the browser
    - wait for the CLI to receive the localhost callback and save the session
    - in Claude Web, use `npx ecomblade login --web` instead
+   - if `npx` is unavailable, use the pure fetch OAuth workflow below
 3. Confirm the connector session:
    - `npx ecomblade whoami --json`
 4. Run connector feature queries when needed:
@@ -114,7 +118,189 @@ For authenticated calls, send:
 
 - `Authorization: Bearer <access_token>`
 
-If a feature call returns `expired_token` or `invalid_token`, use the CLI to refresh/re-authenticate before retrying.
+If a feature call returns `expired_token` or `invalid_token`, refresh the access token with `/public/connectors/auth/refresh` when using pure fetch, or use the CLI to refresh/re-authenticate when using CLI mode.
+
+## Pure fetch OAuth workflow
+
+Use this workflow in Claude Web or any environment that can make HTTPS requests to `api.ecomblade.com` but cannot run `npx ecomblade` reliably.
+
+Constants:
+
+- API base URL: `https://api.ecomblade.com`
+- Client ID: `ecomblade-cli`
+- Redirect URI: `https://api.ecomblade.com/public/connectors/auth/oauth/web-complete`
+- Authorization endpoint: `/public/connectors/auth/oauth/authorize`
+- Completion endpoint: `/public/connectors/auth/oauth/completion`
+- Token endpoint: `/public/connectors/auth/oauth/token`
+- Refresh endpoint: `/public/connectors/auth/refresh`
+- Session endpoint: `/public/connectors/auth/me`
+- Revoke endpoint: `/public/connectors/auth/revoke`
+
+Pure fetch login steps:
+
+1. Generate:
+   - `state`: random base64url string
+   - `code_verifier`: random base64url string with enough entropy
+   - `code_challenge`: base64url SHA-256 digest of `code_verifier`
+2. Build the authorization URL:
+   - `client_id=ecomblade-cli`
+   - `redirect_uri=https://api.ecomblade.com/public/connectors/auth/oauth/web-complete`
+   - `response_type=code`
+   - `state=<state>`
+   - `code_challenge=<code_challenge>`
+   - `code_challenge_method=S256`
+3. `GET` the authorization URL with `redirect: "manual"`.
+4. Read the `Location` response header. This is the Ecomblade approval URL.
+5. Extract `oauth_request_id` from the approval URL.
+6. Ask the user to open the approval URL and approve access.
+7. Poll:
+   - `GET /public/connectors/auth/oauth/completion?request_id=<oauth_request_id>&state=<state>`
+   - If `data.status` is `pending`, wait `data.retry_after` seconds or 2 seconds, then poll again.
+   - If `data.redirect_to` is present, parse it as a URL.
+   - If `redirect_to` contains `error=access_denied`, stop and report denial.
+   - If `redirect_to` contains `code`, continue.
+8. Verify the returned `state` matches the original state.
+9. Exchange the authorization code:
+   - `POST /public/connectors/auth/oauth/token`
+   - JSON body:
+     - `grant_type: "authorization_code"`
+     - `code: <code>`
+     - `redirect_uri: "https://api.ecomblade.com/public/connectors/auth/oauth/web-complete"`
+     - `client_id: "ecomblade-cli"`
+     - `code_verifier: <code_verifier>`
+10. Store the returned:
+    - `access_token`
+    - `refresh_token`
+    - `expires_in`
+    - `session_id`
+    - `token_type`
+    - `user_display_name`
+
+Pure fetch JavaScript example:
+
+```js
+const API_BASE_URL = 'https://api.ecomblade.com'
+const CLIENT_ID = 'ecomblade-cli'
+const REDIRECT_URI =
+  'https://api.ecomblade.com/public/connectors/auth/oauth/web-complete'
+
+const base64url = (bytes) => {
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('')
+  const base64 =
+    typeof btoa === 'function'
+      ? btoa(binary)
+      : Buffer.from(bytes).toString('base64')
+
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
+}
+
+const randomToken = (bytes = 32) => base64url(crypto.getRandomValues(new Uint8Array(bytes)))
+
+const sha256Base64url = async (value) => {
+  const bytes = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return base64url(new Uint8Array(digest))
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+async function loginWithFetch() {
+  const state = randomToken()
+  const codeVerifier = randomToken(48)
+  const codeChallenge = await sha256Base64url(codeVerifier)
+
+  const authorizeUrl = new URL('/public/connectors/auth/oauth/authorize', API_BASE_URL)
+  authorizeUrl.searchParams.set('client_id', CLIENT_ID)
+  authorizeUrl.searchParams.set('redirect_uri', REDIRECT_URI)
+  authorizeUrl.searchParams.set('response_type', 'code')
+  authorizeUrl.searchParams.set('state', state)
+  authorizeUrl.searchParams.set('code_challenge', codeChallenge)
+  authorizeUrl.searchParams.set('code_challenge_method', 'S256')
+
+  const authorizeResponse = await fetch(authorizeUrl, { redirect: 'manual' })
+  const approvalUrl = authorizeResponse.headers.get('location')
+  if (!approvalUrl) throw new Error('Missing Ecomblade approval URL')
+
+  const requestId = new URL(approvalUrl).searchParams.get('oauth_request_id')
+  if (!requestId) throw new Error('Missing OAuth request ID')
+
+  console.log(`Open this URL and approve access: ${approvalUrl}`)
+
+  let redirectTo
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    const completionUrl = new URL('/public/connectors/auth/oauth/completion', API_BASE_URL)
+    completionUrl.searchParams.set('request_id', requestId)
+    completionUrl.searchParams.set('state', state)
+
+    const completionResponse = await fetch(completionUrl)
+    const completion = await completionResponse.json()
+    if (!completion.success) {
+      throw new Error(completion.error?.message || 'OAuth completion failed')
+    }
+
+    if (completion.data.redirect_to) {
+      redirectTo = completion.data.redirect_to
+      break
+    }
+
+    await sleep((completion.data.retry_after || 2) * 1000)
+  }
+
+  if (!redirectTo) throw new Error('Timed out waiting for approval')
+
+  const callbackUrl = new URL(redirectTo)
+  if (callbackUrl.searchParams.get('state') !== state) {
+    throw new Error('OAuth state mismatch')
+  }
+
+  const denied = callbackUrl.searchParams.get('error')
+  if (denied) throw new Error(`OAuth authorization failed: ${denied}`)
+
+  const code = callbackUrl.searchParams.get('code')
+  if (!code) throw new Error('Missing authorization code')
+
+  const tokenResponse = await fetch(
+    new URL('/public/connectors/auth/oauth/token', API_BASE_URL),
+    {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: REDIRECT_URI,
+        client_id: CLIENT_ID,
+        code_verifier: codeVerifier,
+      }),
+    }
+  )
+
+  const token = await tokenResponse.json()
+  if (!tokenResponse.ok || !token.access_token) {
+    throw new Error(token.error?.message || 'OAuth token exchange failed')
+  }
+
+  return token
+}
+```
+
+Pure fetch session calls:
+
+- Inspect session:
+  - `GET /public/connectors/auth/me`
+  - Header: `Authorization: Bearer <access_token>`
+- Refresh access token:
+  - `POST /public/connectors/auth/refresh`
+  - JSON body: `{ "refresh_token": "<refresh_token>" }`
+  - Preserve the original refresh token if the response does not return a new one.
+- Revoke session:
+  - `POST /public/connectors/auth/revoke`
+  - Header: `Authorization: Bearer <access_token>`
+  - JSON body: `{ "session_id": "<session_id>" }`
+
+Pure fetch feature calls use the same endpoints and query parameters from Direct fetch feature routes. Always send `Authorization: Bearer <access_token>`.
 
 ## Output handling
 
